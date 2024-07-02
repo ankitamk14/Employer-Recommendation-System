@@ -62,7 +62,8 @@ import ManagerLayout, {
 import FossFilter from "../components/admin/foss-filter/FossFilter";
 import CompanyRegistration, { loader as Cloader, action as Caction} from "../pages/CompanyRegistration";
 import CompanyUserProfile, {loader as companyUserProfileLoader} from "../components/company/company-job-profile/Profile";
-import StudentProfileData from "../components/student/student-profile/studentProfileData";
+// import StudentProfileData from "../components/student/student-profile/studentProfileData";
+import StudentProfilePage, { loader as studentProfileLoader } from "../components/student/student-profile/studentProfileData";
 
 const router = createBrowserRouter([
   {
@@ -125,7 +126,9 @@ const router = createBrowserRouter([
     children: [
       { path: "dashboard", element: <UnderDevelopmentInfo /> },
       { path: "profile", element: <StudentProfile /> },
-      { path: "student-profile", element: <StudentProfileData /> },
+      { path: "student-profile", element: <StudentProfilePage />, 
+        loader: studentProfileLoader
+       },
 
       
       { path: "jobs", element: <UnderDevelopmentInfo /> },

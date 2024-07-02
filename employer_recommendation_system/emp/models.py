@@ -195,7 +195,7 @@ class Student(models.Model):
     github = models.URLField(null=True,blank=True)
     linkedin = models.URLField(null=True,blank=True)
     cover_letter = models.FileField(null=True,blank=True,upload_to='')
-    resume = models.FileField(null=True,blank=True,upload_to='',verbose_name='Resume*')
+    resume = models.FileField(null=True,blank=True,upload_to='resumes/',verbose_name='Resume*')
     # cover_letter = models.FileField(null=True,blank=True,upload_to=user_directory_path)
     date_created = models.DateTimeField(auto_now_add=True)
     date_updated = models.DateTimeField(auto_now=True)

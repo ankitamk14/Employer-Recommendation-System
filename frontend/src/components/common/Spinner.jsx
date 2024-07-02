@@ -4,7 +4,9 @@ import React from "react";
 import { TailSpin } from "react-loader-spinner";
 function Spinner(props) {
   return (
-    <Box
+    <>
+    <h1>Spinner</h1>
+      <Box
       sx={{
         display: "flex",
         justifyContent: "center",
@@ -25,6 +27,8 @@ function Spinner(props) {
         wrapperClass=""
       />
     </Box>
+    </>
+    
   );
 }
 

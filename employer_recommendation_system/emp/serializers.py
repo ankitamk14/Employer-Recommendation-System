@@ -11,6 +11,7 @@ from utilities.serializers import LocationSerializer
 from django.db.models import Q
 from django.contrib.auth.password_validation import validate_password
 from accounts.serializers import UserRegSerializer
+from django.core.files.storage import FileSystemStorage
 
 class CompanyManagerSerializer1(serializers.ModelSerializer):
         user = UserSerializer()
@@ -1078,3 +1079,35 @@ class PasswordResetSerializer(serializers.Serializer):
         user.set_password(self.validated_data['new_password'])
         user.save()
         return user
+
+class StudentUpdateSerializer(serializers.ModelSerializer):
+    projects = ProjectSerializer(many=True)
+    class Meta:
+        model = Student
+        fields = ['phone', 'about', 'alternate_email', 'joining_immediate', 'avail_for_intern', 'projects', 'certifications',
+                  'github', 'linkedin', 'resume']
+        
+    def update(self, instance, validated_data):
+        projects = validated_data.pop('projects', None)
+        if projects is not None:
+            instance.projects.clear()
+            data = []
+            for project in projects:
+                p = Project.objects.create(**project)
+                data.append(p)
+            instance.projects.set(data)
+        # resume = validated_data.pop('resume')
+        # try:
+        #     if resume:
+                
+        #         for file in redundant_resume:
+        #             os.remove(os.path.join(location,file))
+        #         resume = request.FILES['resume']
+        #         filename_resume = 'resume'+str(request.user.id)+'.pdf'
+        #         filename_r = fs.save(filename_resume, resume)
+        #         student.resume=fs.url(os.path.join('students',str(request.user.id),filename_r))
+        # except MultiValueDictKeyError as e:
+        #     print(e)
+       
+
+        return super().update(instance, validated_data)

@@ -3,7 +3,7 @@ from django.contrib.auth import logout
 
 from events.models import *
 from .models import *
-from spoken.models import TestAttendance, FossMdlCourses,FossCategory, SpokenState, SpokenCity
+from spoken.models import TestAttendance, FossMdlCourses,FossCategory, SpokenState, SpokenCity, Department
 from moodle.models import MdlQuizGrades,MdlUser
 from django.views.generic.edit import UpdateView
 
@@ -65,6 +65,10 @@ from rest_framework.permissions import IsAuthenticated
 
 from django.db.models import F, Func , CharField, Value
 from .permissions import *
+from django.db.models.functions import Cast
+from .serializers import StudentUpdateSerializer
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 
 @check_user
 def document_view(request,pk):
@@ -1635,6 +1639,7 @@ from .permissions import IsCompanyManagerOrReadOnly
 from rest_framework.permissions import IsAuthenticated
 class HomepageView(APIView):
     def get(self, request):
+        print(f"\033[92m Inside get ****** \033[0m")
         data = {
             'past_events': self.get_past_events(),
             'upcoming_events': self.get_upcoming_events(),
@@ -1642,6 +1647,7 @@ class HomepageView(APIView):
             'testimonials':self.get_testimonials(),
             'gallery_images': self.get_gallery_images()
         }
+        print(f"\033[93m {data} \033[0m")
         return Response(data, status=status.HTTP_200_OK)
         
     def get_past_events(self):
@@ -2292,4 +2298,147 @@ class RegisterCompany(APIView):
             error_detail = getattr(e, 'detail', str(e))
             # return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
             return Response({'error': error_detail}, status=status.HTTP_400_BAD_REQUEST)
-            
+class FromUnixTime(Func):
+    function = 'FROM_UNIXTIME'
+    template = '%(function)s(%(expressions)s)'    
+    output_field = DateField()      
+
+class DateFormat(Func):
+    function = 'DATE_FORMAT'
+    template = "%(function)s(%(expressions)s, '%%Y-%%m-%%d %%H:%%i:%%s')"
+    output_field = CharField()
+
+class StudentProfileInitialData(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, user_id):
+        data = {}
+        user = request.user
+        # groups = user.groups.all()
+        groups = user.groups.all()
+        # Allow students to access only their own profile
+        if 'STUDENT' in groups and user.id != user_id:
+            return Response({}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Allow employers and jrs admin(manager) to access other profiles
+       
+        try:
+            student = Student.objects.get(user_id=user_id)
+            spk_user = SpokenUser.objects.get(id=student.spk_usr_id)
+            profile = Profile.objects.filter(user_id=spk_user.id).first()
+            if profile:
+                data['phone'] = profile.phone
+                data['address'] = profile.address
+            data['first_name'] = spk_user.first_name
+            data['last_name'] = spk_user.last_name
+            data['email'] = spk_user.email
+            data['about'] = student.about
+            data['joining_immediate'] = student.joining_immediate
+            data['avail_for_intern'] = student.avail_for_intern
+            data['willing_to_relocate'] = student.willing_to_relocate
+            data['certifications'] = student.certifications
+            data['linkedin'] = student.linkedin
+            data['github'] = student.github
+            data['projects'] = ProjectSerializer(student.projects, many=True).data
+            # data['resume'] = student.resume
+            try:
+                batch = StudentMaster.objects.get(student_id=student.spk_student_id).batch
+                
+                # batch = StudentBatch.objects.get(id=batch_id)
+                academic = AcademicCenter.objects.get(id=batch.academic_id)
+                year = batch.year
+                department = Department.objects.get(id=batch.department_id).name
+                data['academic'] = academic.institution_name
+                data['year'] = year
+                data['department'] = department
+                data['state'] = academic.state.name
+                data['city'] = academic.city.name
+                data['insti_type'] = academic.institution_type.name
+            except Exception as e:
+                print(f"\033[91m Exception getting eduatino : {e} \033[0m")
+            # student test scores
+            try:
+                mdluser = MdlUser.objects.get(email=spk_user.email)
+                # get scores from moodle quiz
+                scores = MdlQuizGrades.objects.filter(userid=mdluser.id).values('quiz', 'grade','timemodified')
+                # create dictionary of student quiz & score
+                quiz_grade = {}
+                quiz_taken_by_students = []
+                for item in scores:
+                    quiz = str(item.get('quiz'))
+                    # grade = item['grade']
+                    quiz_data = {
+                        'grade' : round(item['grade'], 2),
+                        'timemodified' : datetime.datetime.fromtimestamp(item['timemodified']).strftime('%d %B %Y'),
+                    }
+                    quiz_grade[quiz] = quiz_data
+                    quiz_taken_by_students.append(quiz)
+                # create dict of quiz and foss name
+                quiz_foss = {}
+                fossmdlquiz = FossMdlCourses.objects.select_related('foss').filter(
+                    mdlquiz_id__in=quiz_taken_by_students).values('mdlquiz_id','foss__foss')
+                for item in fossmdlquiz:
+                    quiz = str(item['mdlquiz_id'])
+                    foss = item.get('foss__foss')
+                    print(f"\033[92m quiz : {quiz} \033[0m")
+                    quiz_foss[quiz] = foss
+
+                foss_grade = {}
+                # create dict of foss and grades
+                try:
+                    for key in quiz_grade:
+                        # quiz = item[quiz]
+                        print(f"\033[93m key,   : {key}  \033[0m")
+                        if key in quiz_foss:
+                            key_foss = quiz_foss[key]
+                            # val_grade = round(quiz_grade[key], 2)
+                            val_grade = quiz_grade[key]
+                        
+                            foss_grade[key_foss] = val_grade
+                except Exception as e:
+                    print(f"\033[91m e: {e} \033[0m")
+                print(f"\033[93m foss_grade : {foss_grade} \033[0m")
+                data['scores'] = foss_grade
+            except Exception as e:
+                print(f"\033[91m Exception : {e} \033[0m")
+                print("No mdl user")
+            # get mdl user id from spk user email
+            if 'MANAGER' in groups:
+                data['manager_specific_data'] = "manager_specific_data"
+            if 'EMPLOYER' in groups:
+                data['employer_specific_data'] = "employer_specific_data"            
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as e:
+            error_detail = getattr(e, 'detail', str(e))
+            return Response({'error': error_detail}, status=status.HTTP_400_BAD_REQUEST)
+
+def get_user_resume_path(user_id, original_file):
+    print(f"\033[92m get_user_resume_path \033[0m")
+    extension = os.path.splitext(original_file.name)[1]  # Get the file extension
+    print(f"\033[92m extension : {extension} \033[0m")
+    new_file_name = f"resume{user_id}{extension}"  # Create the new file name
+    file_path = os.path.join('students', str(user_id), new_file_name)  # Create the new file path
+    return file_path, ContentFile(original_file.read(), new_file_name)
+    
+
+class StudentUpdateProfile(APIView):
+    def patch(self, request, user_id):
+        student_profile = Student.objects.get(user_id=user_id)
+        data = request.data.copy()
+        if 'resume' in request.FILES:
+            original_file = request.FILES['resume']
+            file_path, new_file = get_user_resume_path(user_id, original_file)
+            print(f"\033[93m file_path : {file_path} \033[0m")
+            print(f"\033[93m new_file : {new_file} \033[0m")
+            saved_path = default_storage.save(file_path, new_file)
+            print(f"\033[95m saved_path ******* : {saved_path} \033[0m")
+            data['resume'] = saved_path  # Update the data dictionary with the new file path
+        serializer = StudentUpdateSerializer(student_profile, data=data, partial=True)
+        try:
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            error_detail = getattr(e, 'detail', str(e))
+            return Response({'error': error_detail}, status=status.HTTP_400_BAD_REQUEST)
+
+

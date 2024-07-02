@@ -148,7 +148,8 @@ urlpatterns = [
     path('api/profile/company/reset-password/',CompanyPasswordReset.as_view(),name='job-data'), #API to prepopulate job form with initial options data
     path('api/company-initial-data/',CompanyRegInitialData.as_view(),name='job-data'), #API to prepopulate job form with initial options data
     path('api/register/company/',RegisterCompany.as_view(),name='job-data'), #API to prepopulate job form with initial options data
-    
+    path('api/student-initial-data/<int:user_id>',StudentProfileInitialData.as_view(),name='job-data'), #API to prepopulate job form with initial options data
+    path('api/students/<int:user_id>',StudentUpdateProfile.as_view(),name='job-data'), #API to prepopulate job form with initial options data
     
     
 ]
